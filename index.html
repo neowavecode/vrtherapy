@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Terapia Espejo VR</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: black;
+            overflow: hidden; /* Evita scroll */
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Contenedor para cada ojo */
+        .eye {
+            width: 50%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+            border-right: 1px solid #333; /* Línea separadora opcional */
+        }
+
+        /* La imagen de la cámara */
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Asegura que llene la pantalla sin deformarse */
+            
+            /* AQUÍ ESTÁ LA MAGIA: */
+            /* scaleX(-1) hace el efecto espejo horizontal */
+            transform: scaleX(-1); 
+        }
+
+        /* Botón de inicio */
+        #startBtn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            padding: 15px 30px;
+            font-size: 20px;
+            background: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="startBtn" onclick="iniciarCamara()">Iniciar Terapia</button>
+
+    <div class="eye">
+        <video id="videoLeft" playsinline autoplay muted></video>
+    </div>
+
+    <div class="eye">
+        <video id="videoRight" playsinline autoplay muted></video>
+    </div>
+
+    <script>
+        async function iniciarCamara() {
+            try {
+                // Pedir acceso a la cámara trasera
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: "environment", // "environment" fuerza la cámara trasera
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                });
+
+                // Asignar el stream a ambos videos
+                const videoLeft = document.getElementById('videoLeft');
+                const videoRight = document.getElementById('videoRight');
+                
+                videoLeft.srcObject = stream;
+                videoRight.srcObject = stream;
+
+                // Ocultar botón
+                document.getElementById('startBtn').style.display = 'none';
+
+                // Prevenir que el móvil se apague (solo funciona en algunos navegadores modernos)
+                if ('wakeLock' in navigator) {
+                    try {
+                        await navigator.wakeLock.request('screen');
+                    } catch (err) {
+                        console.log('No se pudo bloquear pantalla, toca la pantalla de vez en cuando.');
+                    }
+                }
+
+            } catch (err) {
+                alert("Error: No se pudo acceder a la cámara. Asegúrate de dar permisos y usar HTTPS.");
+                console.error(err);
+            }
+        }
+    </script>
+</body>
+</html>
