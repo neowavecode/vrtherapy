@@ -30,7 +30,7 @@
         video {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: cover; /* Esto estira la imagen para que no haya bordes negros */
             transform: scaleX(-1); /* EFECTO ESPEJO */
         }
 
@@ -58,7 +58,6 @@
             cursor: pointer;
             font-weight: bold;
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            transition: transform 0.1s;
         }
 
         button:active {
@@ -104,9 +103,9 @@
     <div id="camLabel">Cámara: Detectando...</div>
 
     <div class="controls" id="startContainer">
-        <h2 style="color: white; margin: 0;">Terapia VR</h2>
-        <p style="color: #aaa; font-size: 14px; margin-bottom: 10px;">Para Samsung S24</p>
-        <button onclick="iniciarApp()">INICIAR Y PANTALLA COMPLETA</button>
+        <h2 style="color: white; margin: 0;">Terapia VR S24</h2>
+        <p style="color: #aaa; font-size: 14px; margin-bottom: 10px;">Versión Compatible</p>
+        <button onclick="iniciarApp()">INICIAR APP</button>
     </div>
 
     <button id="switchBtn" onclick="siguienteCamara()">Cambiar Lente ↻</button>
@@ -124,26 +123,18 @@
         let currentDeviceIndex = 0;
 
         async function iniciarApp() {
-            // 1. FORZAR PANTALLA COMPLETA
+            // Intento de Pantalla Completa
             const docElm = document.documentElement;
-            if (docElm.requestFullscreen) {
-                docElm.requestFullscreen().catch(err => console.log("Fullscreen bloqueado:", err));
-            } else if (docElm.mozRequestFullScreen) {
-                docElm.mozRequestFullScreen();
-            } else if (docElm.webkitRequestFullScreen) {
-                docElm.webkitRequestFullScreen();
-            } else if (docElm.msRequestFullscreen) {
-                docElm.msRequestFullscreen();
-            }
+            if (docElm.requestFullscreen) { docElm.requestFullscreen().catch(e => {}); }
 
             try {
-                // 2. Permisos y búsqueda de cámaras
+                // Pedimos cámara genérica primero para obtener permisos
                 await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                 
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const allVideo = devices.filter(device => device.kind === 'videoinput');
                 
-                // Priorizar traseras en Samsung
+                // Filtro para intentar coger solo las traseras (Back / Environment)
                 const backCams = allVideo.filter(d => 
                     d.label.toLowerCase().includes('back') || 
                     d.label.toLowerCase().includes('trasera') ||
@@ -160,47 +151,60 @@
                     document.getElementById('switchBtn').style.display = 'block';
                     document.getElementById('camLabel').style.display = 'block';
                     
-                    // Bloqueo de pantalla (Wake Lock)
                     if ('wakeLock' in navigator) {
                         try { await navigator.wakeLock.request('screen'); } catch (e) {}
                     }
                 } else {
-                    alert("No se encontraron cámaras");
+                    alert("No se detectan cámaras.");
                 }
 
             } catch (err) {
-                alert("Error: " + err.message);
+                alert("Error de inicio: " + err.message);
             }
         }
 
         async function activarCamara(index) {
+            // 1. Detener stream anterior completamente
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
             }
+
+            // Limpiamos el video temporalmente para evitar congelamientos
+            const vL = document.getElementById('videoLeft');
+            const vR = document.getElementById('videoRight');
+            vL.srcObject = null;
+            vR.srcObject = null;
+
+            // Pequeña pausa para que el hardware del S24 respire (100ms)
+            await new Promise(r => setTimeout(r, 100));
 
             const device = videoDevices[index];
             currentDeviceIndex = index;
 
             document.getElementById('switchBtn').innerText = `Lente ${index + 1} / ${videoDevices.length} (Cambiar)`;
-            document.getElementById('camLabel').innerText = `ID: ${device.label.substring(0, 20)}...`;
+            document.getElementById('camLabel').innerText = `ID: ${device.label.substring(0, 15)}...`;
 
             try {
+                // 2. CONFIGURACIÓN FLEXIBLE (Sin resolución forzada)
+                // Esto arregla la pantalla negra en lentes secundarias
                 const constraints = {
                     video: { 
-                        deviceId: { exact: device.deviceId },
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
+                        deviceId: { exact: device.deviceId }
+                        // Hemos quitado width/height ideal. Dejamos que la cámara decida su mejor resolución.
                     },
                     audio: false
                 };
 
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 
-                document.getElementById('videoLeft').srcObject = currentStream;
-                document.getElementById('videoRight').srcObject = currentStream;
+                vL.srcObject = currentStream;
+                vR.srcObject = currentStream;
 
             } catch (err) {
                 console.error(err);
+                document.getElementById('camLabel').innerText = "Error en Lente. Prueba otra.";
+                alert("Esta lente no responde, prueba la siguiente.");
             }
         }
 
