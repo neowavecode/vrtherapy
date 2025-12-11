@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#000000">
-    <title>S24 Terapia VR</title>
+    <link rel="manifest" href="data:application/manifest+json;base64,ewogICJuYW1lIjogIlRlcmFwaWEgVlIiLAogICJzaG9ydF9uYW1lIjogIlRlcmFwaWEiLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMwMDAwMDAiLAogICJ0aGVtZV9jb2xvciI6ICIjMDAwMDAwIgp9">
+
+    <title>Terapia VR</title>
     <style>
         body {
             margin: 0;
@@ -16,7 +19,7 @@
             display: flex;
             height: 100vh;
             width: 100vw;
-            font-family: sans-serif;
+            font-family: Arial, sans-serif;
         }
 
         .eye {
@@ -30,188 +33,150 @@
         video {
             width: 100%;
             height: 100%;
-            object-fit: cover; /* Esto estira la imagen para que no haya bordes negros */
+            object-fit: cover; /* Estira la imagen para llenar todo */
             transform: scaleX(-1); /* EFECTO ESPEJO */
         }
 
-        .controls {
+        /* Pantalla de inicio */
+        #pantallaInicio {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 20;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: black;
+            z-index: 100;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            justify-content: center;
+            align-items: center;
+            color: white;
             text-align: center;
-            width: 80%;
-            max-width: 300px;
         }
 
-        button {
-            padding: 15px;
-            font-size: 18px;
-            background: #ffffff;
-            color: #000;
+        /* Botón Grande de Inicio */
+        .btn-grande {
+            padding: 20px 40px;
+            font-size: 22px;
+            background: #007bff;
+            color: white;
             border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            font-weight: bold;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border-radius: 50px;
+            margin-top: 20px;
+            box-shadow: 0 0 20px rgba(0,123,255,0.5);
         }
 
-        button:active {
-            transform: scale(0.95);
-        }
-
-        #switchBtn {
-            display: none; 
+        /* Botón discreto para cambiar cámara */
+        #btnCambio {
+            display: none; /* Se oculta al principio */
             position: absolute;
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            z-index: 30;
-            background: rgba(0, 0, 0, 0.5);
+            z-index: 50;
+            background: rgba(255,255,255,0.3);
+            border: 2px solid white;
             color: white;
-            border: 1px solid rgba(255,255,255,0.3);
-            backdrop-filter: blur(4px);
-            font-size: 14px;
-            padding: 10px 20px;
-            width: auto;
-            white-space: nowrap;
-            border-radius: 20px;
-        }
-
-        #camLabel {
-            position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 30;
-            color: #00ff00;
-            background: rgba(0,0,0,0.6);
-            padding: 4px 8px;
-            border-radius: 4px;
-            display: none;
-            font-size: 10px;
-            pointer-events: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 30px;
+            backdrop-filter: blur(5px);
         }
     </style>
 </head>
 <body>
 
-    <div id="camLabel">Cámara: Detectando...</div>
-
-    <div class="controls" id="startContainer">
-        <h2 style="color: white; margin: 0;">Terapia VR S24</h2>
-        <p style="color: #aaa; font-size: 14px; margin-bottom: 10px;">Versión Compatible</p>
-        <button onclick="iniciarApp()">INICIAR APP</button>
+    <div id="pantallaInicio">
+        <h1>Terapia Espejo</h1>
+        <p>1. Pulsa el botón<br>2. Da permisos a la cámara</p>
+        <button class="btn-grande" onclick="arrancarTodo()">INICIAR APP</button>
     </div>
 
-    <button id="switchBtn" onclick="siguienteCamara()">Cambiar Lente ↻</button>
+    <button id="btnCambio" onclick="siguienteCamara()">CAMBIAR CÁMARA ↻</button>
 
-    <div class="eye">
-        <video id="videoLeft" playsinline autoplay muted></video>
-    </div>
-    <div class="eye">
-        <video id="videoRight" playsinline autoplay muted></video>
-    </div>
+    <div class="eye"><video id="videoL" playsinline autoplay muted></video></div>
+    <div class="eye"><video id="videoR" playsinline autoplay muted></video></div>
 
     <script>
-        let currentStream;
-        let videoDevices = [];
-        let currentDeviceIndex = 0;
+        let streamActual = null;
+        let listaCamaras = [];
+        let indiceCamara = 0;
 
-        async function iniciarApp() {
-            // Intento de Pantalla Completa
-            const docElm = document.documentElement;
-            if (docElm.requestFullscreen) { docElm.requestFullscreen().catch(e => {}); }
+        async function arrancarTodo() {
+            // 1. Intentar poner Pantalla Completa
+            let elem = document.documentElement;
+            if (elem.requestFullscreen) { elem.requestFullscreen().catch(e => console.log(e)); }
+            else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); }
 
+            // 2. Ocultar pantalla inicio
+            document.getElementById('pantallaInicio').style.display = 'none';
+            document.getElementById('btnCambio').style.display = 'block';
+
+            // 3. Obtener cámaras
             try {
-                // Pedimos cámara genérica primero para obtener permisos
-                await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                // Pedimos permiso genérico primero
+                await navigator.mediaDevices.getUserMedia({ video: true });
                 
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const allVideo = devices.filter(device => device.kind === 'videoinput');
-                
-                // Filtro para intentar coger solo las traseras (Back / Environment)
-                const backCams = allVideo.filter(d => 
-                    d.label.toLowerCase().includes('back') || 
-                    d.label.toLowerCase().includes('trasera') ||
-                    d.label.toLowerCase().includes('environment') ||
-                    d.label.toLowerCase().includes('0') 
-                );
+                // Listamos TODO lo que sea video
+                const dispositivos = await navigator.mediaDevices.enumerateDevices();
+                listaCamaras = dispositivos.filter(d => d.kind === 'videoinput');
 
-                videoDevices = backCams.length > 0 ? backCams : allVideo;
-
-                if (videoDevices.length > 0) {
-                    activarCamara(0);
-                    
-                    document.getElementById('startContainer').style.display = 'none';
-                    document.getElementById('switchBtn').style.display = 'block';
-                    document.getElementById('camLabel').style.display = 'block';
-                    
-                    if ('wakeLock' in navigator) {
-                        try { await navigator.wakeLock.request('screen'); } catch (e) {}
-                    }
-                } else {
+                if (listaCamaras.length === 0) {
                     alert("No se detectan cámaras.");
+                } else {
+                    // Iniciamos la primera de la lista
+                    cargarCamara(0);
+                }
+
+                // Bloqueo de pantalla para que no se apague
+                if ('wakeLock' in navigator) {
+                    try { await navigator.wakeLock.request('screen'); } catch(e){}
                 }
 
             } catch (err) {
-                alert("Error de inicio: " + err.message);
+                alert("Error: " + err.message);
+                document.getElementById('pantallaInicio').style.display = 'flex';
             }
         }
 
-        async function activarCamara(index) {
-            // 1. Detener stream anterior completamente
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-                currentStream = null;
+        async function cargarCamara(index) {
+            // Detenemos la cámara anterior si existe
+            if (streamActual) {
+                streamActual.getTracks().forEach(track => track.stop());
             }
 
-            // Limpiamos el video temporalmente para evitar congelamientos
-            const vL = document.getElementById('videoLeft');
-            const vR = document.getElementById('videoRight');
-            vL.srcObject = null;
-            vR.srcObject = null;
-
-            // Pequeña pausa para que el hardware del S24 respire (100ms)
-            await new Promise(r => setTimeout(r, 100));
-
-            const device = videoDevices[index];
-            currentDeviceIndex = index;
-
-            document.getElementById('switchBtn').innerText = `Lente ${index + 1} / ${videoDevices.length} (Cambiar)`;
-            document.getElementById('camLabel').innerText = `ID: ${device.label.substring(0, 15)}...`;
-
+            // Seleccionamos la cámara de la lista
+            let camara = listaCamaras[index];
+            
             try {
-                // 2. CONFIGURACIÓN FLEXIBLE (Sin resolución forzada)
-                // Esto arregla la pantalla negra en lentes secundarias
+                // NO pedimos resolución específica para evitar fallos. 
+                // Que la cámara nos de lo que tenga por defecto.
                 const constraints = {
-                    video: { 
-                        deviceId: { exact: device.deviceId }
-                        // Hemos quitado width/height ideal. Dejamos que la cámara decida su mejor resolución.
-                    },
+                    video: { deviceId: { exact: camara.deviceId } },
                     audio: false
                 };
 
-                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                streamActual = await navigator.mediaDevices.getUserMedia(constraints);
                 
-                vL.srcObject = currentStream;
-                vR.srcObject = currentStream;
+                document.getElementById('videoL').srcObject = streamActual;
+                document.getElementById('videoR').srcObject = streamActual;
+
+                // Feedback visual en el botón
+                document.getElementById('btnCambio').innerText = `CÁMARA ${index + 1} / ${listaCamaras.length} (Cambiar)`;
 
             } catch (err) {
                 console.error(err);
-                document.getElementById('camLabel').innerText = "Error en Lente. Prueba otra.";
-                alert("Esta lente no responde, prueba la siguiente.");
+                alert("Error al cargar cámara " + (index+1));
             }
         }
 
         function siguienteCamara() {
-            if (videoDevices.length < 2) return;
-            let nextIndex = (currentDeviceIndex + 1) % videoDevices.length;
-            activarCamara(nextIndex);
+            if (listaCamaras.length < 1) return;
+            
+            // Sumamos 1 al índice. Si llegamos al final, volvemos a 0.
+            indiceCamara++;
+            if (indiceCamara >= listaCamaras.length) {
+                indiceCamara = 0;
+            }
+            
+            cargarCamara(indiceCamara);
         }
     </script>
 </body>
