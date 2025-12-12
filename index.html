@@ -8,88 +8,91 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#000000">
 
-    <title>Terapia VR S24</title>
+    <title>Rehabilitación Espejo VR</title>
     <style>
         body {
-            margin: 0;
-            padding: 0;
-            background-color: black;
-            overflow: hidden;
-            display: flex;
-            height: 100vh;
-            width: 100vw;
+            margin: 0; padding: 0; background-color: black;
+            overflow: hidden; display: flex; height: 100vh; width: 100vw;
             font-family: Arial, sans-serif;
+            -webkit-user-select: none; /* Evita seleccionar texto sin querer */
+            user-select: none;
         }
 
         .eye {
-            width: 50%;
-            height: 100%;
-            position: relative;
-            overflow: hidden;
-            border-right: 1px solid #111;
+            width: 50%; height: 100%; position: relative;
+            overflow: hidden; border-right: 1px solid #111;
         }
 
         video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover; /* Estira la imagen */
+            width: 100%; height: 100%; object-fit: cover;
             transform: scaleX(-1); /* EFECTO ESPEJO */
         }
 
-        /* Pantalla de inicio */
+        /* --- PANTALLA DE INICIO --- */
         #pantallaInicio {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: black;
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            text-align: center;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #1a1a1a, #000000);
+            z-index: 100; display: flex;
+            flex-direction: column; justify-content: center;
+            align-items: center; color: white; text-align: center;
         }
+
+        h1 { margin-bottom: 10px; font-size: 28px; letter-spacing: 1px; }
+        p { color: #aaa; margin-bottom: 30px; }
 
         .btn-grande {
-            padding: 20px 40px;
-            font-size: 22px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 50px;
-            margin-top: 20px;
-            box-shadow: 0 0 20px rgba(0,123,255,0.5);
+            padding: 18px 40px; font-size: 20px; background: #007bff;
+            color: white; border: none; border-radius: 50px;
+            box-shadow: 0 0 25px rgba(0,123,255,0.4);
+            cursor: pointer; transition: transform 0.2s;
+            font-weight: bold; text-transform: uppercase;
         }
+        .btn-grande:active { transform: scale(0.95); }
 
-        /* Botón discreto para cambiar cámara */
-        #btnCambio {
-            display: none; 
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 50;
-            background: rgba(255,255,255,0.2);
-            border: 2px solid white;
-            color: white;
-            padding: 15px 30px;
-            font-size: 16px;
+        /* Botón PayPal */
+        .btn-paypal {
+            margin-top: 40px;
+            padding: 12px 25px;
+            font-size: 14px;
+            background: transparent;
+            color: #FFC439; /* Color dorado PayPal */
+            border: 1px solid #FFC439;
             border-radius: 30px;
-            backdrop-filter: blur(5px);
-            font-weight: bold;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            text-decoration: none;
+            display: inline-block;
+            transition: background 0.3s;
+        }
+        .btn-paypal:hover { background: rgba(255, 196, 57, 0.1); }
+
+        /* --- BOTÓN FLOTANTE (CAMBIAR CÁMARA) --- */
+        #btnCambio {
+            display: none; position: absolute; bottom: 30px; left: 50%;
+            transform: translateX(-50%); z-index: 50;
+            background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.4);
+            color: white; padding: 12px 25px; font-size: 14px;
+            border-radius: 30px; backdrop-filter: blur(4px);
+            font-weight: bold; 
+            transition: opacity 0.5s ease;
+            opacity: 1;
+            white-space: nowrap;
         }
     </style>
 </head>
-<body>
+
+<body onclick="interaccionUsuario()">
 
     <div id="pantallaInicio">
         <h1>Terapia Espejo VR</h1>
-        <p>Versión S24 Fullscreen</p>
-        <button class="btn-grande" onclick="arrancarTodo()">INICIAR APP</button>
+        <p>Herramienta gratuita de rehabilitación</p>
+        
+        <button class="btn-grande" onclick="arrancarTodo(event)">COMENZAR</button>
+
+        <a href="https://www.paypal.me/josestorm88" target="_blank" class="btn-paypal">
+            ☕ Invítame a un café
+        </a>
     </div>
 
-    <button id="btnCambio" onclick="siguienteCamara()">CAMBIAR CÁMARA ↻</button>
+    <button id="btnCambio" onclick="siguienteCamara(event)">CAMBIAR CÁMARA ↻</button>
 
     <div class="eye"><video id="videoL" playsinline autoplay muted></video></div>
     <div class="eye"><video id="videoR" playsinline autoplay muted></video></div>
@@ -98,79 +101,114 @@
         let streamActual = null;
         let listaCamaras = [];
         let indiceCamara = 0;
+        let ocultarTimer;
+        let intentosFallidos = 0; // Para evitar bucles infinitos si no hay cámaras
 
-        // Función para forzar pantalla completa agresivamente
+        // Función para asegurar pantalla completa sin errores visuales
         function forzarFullscreen() {
             let elem = document.documentElement;
             if (!document.fullscreenElement) {
-                if (elem.requestFullscreen) { elem.requestFullscreen().catch(err => console.log(err)); }
+                if (elem.requestFullscreen) { elem.requestFullscreen().catch(e=>{}); }
                 else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); }
-                else if (elem.msRequestFullscreen) { elem.msRequestFullscreen(); }
             }
         }
 
-        async function arrancarTodo() {
-            forzarFullscreen(); // Fullscreen al iniciar
+        // Sistema para mostrar/ocultar botón automáticamente
+        function interaccionUsuario() {
+            const btn = document.getElementById('btnCambio');
+            
+            // Si ya arrancamos la app (el botón existe)
+            if(btn.style.display === 'block') {
+                btn.style.opacity = '1'; // Mostrar
+                clearTimeout(ocultarTimer);
+                
+                // Ocultar a los 5 segundos de inactividad
+                ocultarTimer = setTimeout(() => {
+                    btn.style.opacity = '0'; 
+                }, 5000);
+            }
+        }
+
+        async function arrancarTodo(e) {
+            if(e) e.stopPropagation();
+            forzarFullscreen();
 
             document.getElementById('pantallaInicio').style.display = 'none';
             document.getElementById('btnCambio').style.display = 'block';
+            interaccionUsuario(); // Iniciar timer
 
             try {
-                // Permisos iniciales
+                // Permiso inicial
                 await navigator.mediaDevices.getUserMedia({ video: true });
                 
-                // Listar cámaras
                 const dispositivos = await navigator.mediaDevices.enumerateDevices();
                 listaCamaras = dispositivos.filter(d => d.kind === 'videoinput');
 
                 if (listaCamaras.length === 0) {
-                    alert("No se detectan cámaras.");
+                    // Fallback visual silencioso
+                    document.getElementById('btnCambio').innerText = "No se detectan cámaras";
                 } else {
                     cargarCamara(0);
                 }
 
-                // Evitar bloqueo pantalla
-                if ('wakeLock' in navigator) {
-                    try { await navigator.wakeLock.request('screen'); } catch(e){}
-                }
-
+                if ('wakeLock' in navigator) { try { await navigator.wakeLock.request('screen'); } catch(e){} }
             } catch (err) {
-                alert("Error: " + err.message);
+                // Si falla el permiso inicial, volvemos al inicio sin alert intrusivo
+                console.error(err);
                 document.getElementById('pantallaInicio').style.display = 'flex';
+                alert("Necesitamos permiso de cámara para funcionar.");
             }
         }
 
         async function cargarCamara(index) {
-            // Detener stream previo
             if (streamActual) {
                 streamActual.getTracks().forEach(track => track.stop());
             }
 
             let camara = listaCamaras[index];
+            const btn = document.getElementById('btnCambio');
             
+            // Indicador de carga
+            btn.innerText = `Cargando Cám ${index + 1}...`;
+
             try {
-                const constraints = {
+                // Intentamos cargar la cámara
+                streamActual = await navigator.mediaDevices.getUserMedia({
                     video: { deviceId: { exact: camara.deviceId } },
                     audio: false
-                };
-
-                streamActual = await navigator.mediaDevices.getUserMedia(constraints);
+                });
                 
+                // Si llegamos aquí, FUNCIONÓ
                 document.getElementById('videoL').srcObject = streamActual;
                 document.getElementById('videoR').srcObject = streamActual;
-
-                document.getElementById('btnCambio').innerText = `CÁMARA ${index + 1}/${listaCamaras.length} (Cambiar)`;
+                
+                btn.innerText = `CÁMARA ${index + 1} / ${listaCamaras.length}`;
+                intentosFallidos = 0; // Resetear contador de fallos
 
             } catch (err) {
-                console.error(err);
-                alert("Error al cargar esta cámara, pasa a la siguiente.");
+                console.log("Error en cámara " + index + ", saltando...");
+                
+                // --- AQUÍ ESTÁ EL TRUCO PARA EVITAR LA BARRA DEL NAVEGADOR ---
+                // No usamos alert(). Simplemente saltamos a la siguiente.
+                
+                intentosFallidos++;
+                // Si hemos probado todas y ninguna va, paramos para no colgar el móvil
+                if (intentosFallidos >= listaCamaras.length) {
+                    btn.innerText = "Error: Ninguna cámara disponible";
+                    return;
+                }
+
+                // Salto recursivo automático a la siguiente cámara (rápido, 100ms)
+                setTimeout(() => {
+                   siguienteCamara(null); 
+                }, 100);
             }
         }
 
-        function siguienteCamara() {
-            // ¡AQUÍ ESTÁ LA CLAVE!
-            // Cada vez que pulsas el botón, re-forzamos pantalla completa antes de nada
-            forzarFullscreen();
+        function siguienteCamara(e) {
+            if(e) e.stopPropagation();
+            forzarFullscreen(); // Asegurar pantalla completa
+            interaccionUsuario(); // Mantener botón visible
 
             if (listaCamaras.length < 1) return;
             
